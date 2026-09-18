@@ -1,0 +1,21 @@
+name: CEREBRON F67 Farm Contract
+on:
+  push:
+    paths: ['farm.json','.github/workflows/farm-contract.yml']
+  workflow_dispatch:
+jobs:
+  validate-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Validate farm contract
+        shell: python
+        run: |
+          import json
+          p=json.load(open("farm.json"))
+          assert p["farm_id"]==67 and p["kernel"]=="dmaillot95-ui/cerebron-omega-ai"
+          assert "forum-agora-transport" in p["capabilities"]
+          assert "SPIRALIX-FORUM-OMEGA" in p["shared_modules"]
+          print("F67_CONTRACT_VERIFIED")
