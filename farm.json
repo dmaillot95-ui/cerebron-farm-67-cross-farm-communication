@@ -1,0 +1,24 @@
+{
+  "farm_id": 67,
+  "name": "cerebron-farm-67-cross-farm-communication",
+  "domain": "cross-farm-communication",
+  "status": "SCAFFOLDED",
+  "protocol": "SPIRALIX-OMEGA",
+  "capabilities": [
+    "cross-farm-communication",
+    "forum-agora-transport",
+    "auditable-message-routing"
+  ],
+  "evidence_ceiling": "E2-before-live-cross-repo-test",
+  "kernel": "dmaillot95-ui/cerebron-omega-ai",
+  "shared_modules": [
+    "SPIRALIX-FORUM-OMEGA",
+    "SPIRALIX-AGORA-OMEGA",
+    "COALITION-DATABANK-OMEGA"
+  ],
+  "rules": [
+    "MESSAGE_DELIVERY!=SCIENTIFIC_VALIDATION",
+    "CONSENSUS!=TRUTH",
+    "SHARED_DEPENDENCY!=INDEPENDENT_EVIDENCE"
+  ]
+}
