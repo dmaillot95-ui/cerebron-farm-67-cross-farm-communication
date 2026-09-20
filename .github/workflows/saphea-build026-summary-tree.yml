@@ -1,0 +1,16 @@
+name: CEREBRON SAPHEA BUILD-026 Summary Tree
+on:
+  push:
+    paths:
+      - 'worker/cerebron_summary_tree.py'
+      - 'tests/test_summary_tree.py'
+      - '.github/workflows/saphea-build026-summary-tree.yml'
+  workflow_dispatch:
+jobs:
+  summary-tree:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python tests/test_summary_tree.py
