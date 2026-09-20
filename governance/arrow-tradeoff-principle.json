@@ -1,0 +1,25 @@
+{
+  "id": "AFAH-ARROW-TRADEOFF-001",
+  "name": "ARROW / TRADE-OFF PRINCIPLE",
+  "scope": "AFAH -> CEREBRON ΑΩ -> colonies -> agents -> tools",
+  "status": "ARCHITECTURE_RULE",
+  "scientific_note": "Engineering principle inspired by social-choice trade-offs; not a claim that Arrow's theorem directly proves an AI architecture result.",
+  "rule": "NO PERFECT SYSTEM -> EXPLICIT TRADE-OFFS -> MISSION-DEPENDENT OPTIMUM",
+  "requirements": [
+    "Declare mission objectives and non-negotiable constraints before arbitration.",
+    "When objectives conflict, record what is preserved, what is sacrificed, and why.",
+    "Do not treat majority, consensus, or agent count as truth.",
+    "Preserve provenance, uncertainty, canonical tool results, evidence status, and auditability.",
+    "Use mission-dependent weighting or Pareto-style selection rather than a universal winner.",
+    "Retain minority blockers and contradictory evidence for Red Team review."
+  ],
+  "integration": [
+    "ROUTER",
+    "AGORA",
+    "RED_TEAM",
+    "F59_VERIFIED_LEARNING",
+    "F72_REALITY_GATE",
+    "F74_MEMORY"
+  ],
+  "evidence_ceiling": "ARCHITECTURE_DECLARATION_NOT_PERFORMANCE_PROOF"
+}
