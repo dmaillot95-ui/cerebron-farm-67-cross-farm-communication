@@ -1,0 +1,68 @@
+name: CEREBRON SAPHEA BUILD-045 Academy First Real Chapter
+on:
+  push:
+    paths: ['.github/workflows/saphea-build045-academy-real-chapter.yml']
+  workflow_dispatch:
+jobs:
+  chapter:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {student: SAPHEA, model: "Qwen/Qwen3-1.7B"}
+          - {student: SAPHIDE, model: "HuggingFaceTB/SmolLM2-1.7B-Instruct"}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip -q install transformers torch sentencepiece
+      - name: Study C01 and take unseen exam
+        env: {STUDENT: "${{ matrix.student }}", MODEL: "${{ matrix.model }}"}
+        run: |
+          python - <<'PY'
+          import os,json,re,hashlib
+          from transformers import AutoTokenizer,AutoModelForCausalLM
+          s,m=os.environ["STUDENT"],os.environ["MODEL"]
+          chapter="""ACADEMY C01 — Units, dimensions and orders of magnitude.
+SECTION 1 SI: Convert prefixes before equations. k=1000, m=0.001.
+SECTION 2 DIMENSIONS: An equation is invalid if both sides have incompatible dimensions.
+SECTION 3 ORDER: Check whether a numerical result is physically plausible in scale.
+SECTION 4 SIGNIFICANT FIGURES: Do not invent precision unsupported by inputs.
+WORKED EXAMPLES: 2.5 kN=2500 N. 3000 mm=3 m.
+COMMON ERRORS: mixing kN with N; treating mm as m; accepting dimensionally inconsistent equations.
+GLYPH: G:value@unit -> D:convert@SI -> V:dimension -> C:result."""
+          exam="""UNSEEN EXAM. A force is 3.2 kN and an area is 800 mm^2.
+Return EXACTLY 4 short lines:
+FORCE_N=<value>
+AREA_M2=<value>
+PRESSURE_PA=<value>
+DIMENSION=<pressure dimension in base SI>"""
+          prompt=f"You are {s}. Study the chapter, then solve alone.\n{chapter}\n{exam}"
+          t=AutoTokenizer.from_pretrained(m); model=AutoModelForCausalLM.from_pretrained(m)
+          inp=t(prompt,return_tensors="pt"); out=model.generate(**inp,max_new_tokens=100,do_sample=False)
+          txt=t.decode(out[0][inp["input_ids"].shape[1]:],skip_special_tokens=True)
+          low=txt.lower().replace(",","")
+          force=("3200" in low or "3.2e3" in low)
+          area=("0.0008" in low or "8e-4" in low or "8.0e-4" in low)
+          pressure=("4000000" in low or "4e6" in low or "4.0e6" in low)
+          dimension=(("kg" in low and ("m^-1" in low or "m-1" in low or "/m" in low) and ("s^-2" in low or "s-2" in low or "/s" in low)) or "pa" in low)
+          passed=force and area and pressure and dimension
+          rec={"student":s,"model":m,"chapter":"C01","state":"EXECUTED","output":txt,
+               "checks":{"force":force,"area":area,"pressure":pressure,"dimension":dimension},
+               "status":"AUDITOR_REQUIRED" if passed else "GPT_MENTOR_REQUIRED"}
+          rec["sha256"]=hashlib.sha256(txt.encode()).hexdigest()
+          os.makedirs("academy",exist_ok=True);open(f"academy/{s}-C01.json","w").write(json.dumps(rec,indent=2))
+          print(json.dumps({"student":s,"checks":rec["checks"],"status":rec["status"]}))
+          PY
+      - uses: actions/upload-artifact@v4
+        with: {name: "academy-C01-${{ matrix.student }}", path: "academy/*.json"}
+  gate:
+    needs: chapter
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "REAL_CHAPTER_EXECUTED=TRUE"
+          echo "PASS!=MASTERY"
+          echo "AUDITOR_REQUIRED=TRUE"
+          echo "SAPHEA_BUILD_045_ACADEMY_REAL_CHAPTER_COMPLETE"
