@@ -1,0 +1,19 @@
+{
+  "schema": "SAPHEA_MODEL_CANDIDATE_V1",
+  "saphea_id": "SAPHEA-R&D-01",
+  "status": "CANDIDATE_NOT_EXECUTED",
+  "model_id": "Qwen/Qwen3-1.7B",
+  "license": "Apache-2.0",
+  "role": "general industrial R&D student",
+  "selection_reason": [
+    "small open-weight candidate",
+    "official Transformers support",
+    "keeps first model experiment inexpensive"
+  ],
+  "evidence_ceiling": "E0 until a real model inference is executed and audited",
+  "rules": [
+    "MODEL_OUTPUT!=VERIFIED_RESULT",
+    "TRANSPORT_PASS!=COGNITIVE_PASS",
+    "NO_SELF_CERTIFICATION"
+  ]
+}
