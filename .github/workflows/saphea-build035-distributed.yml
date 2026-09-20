@@ -1,0 +1,13 @@
+name: CEREBRON SAPHEA BUILD-035 Distributed Foundry
+on:
+  push:
+    paths: ['worker/distributed_foundry.py','tests/test_distributed_foundry.py','.github/workflows/saphea-build035-distributed.yml']
+  workflow_dispatch:
+jobs:
+  distributed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python tests/test_distributed_foundry.py
