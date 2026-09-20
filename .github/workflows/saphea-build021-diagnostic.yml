@@ -1,0 +1,36 @@
+name: CEREBRON SAPHEA BUILD-021 Diagnostic Audit
+on:
+  push:
+    paths: ['.github/workflows/saphea-build021-diagnostic.yml']
+  workflow_dispatch:
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Diagnose frozen BUILD-020 outputs
+        run: |
+          python - <<'PY'
+          import re,json
+          science="""**GIVEN** Force 20000 N Area 0.002 m2 Reported stress 1 MPa **DERIVED** sigma=F/A **UNKNOWN** Calculated stress **COMPUTATION** 20000/0.002=10,000,000 Pa=10 MPa **UNCERTAINTY** reported 1 MPa but calculation 10 MPa; reported likely approximation or rounded value."""
+          red="""SAPHEA-REDTEAM Force 20000 N Area 0.002 m2 Stress 1 MPa claimed Material Steel assumed standard steel with known yield strength and elastic modulus. calculated 10,000,000 Pa = 10 MPa. report claims 1 MPa actual 10 MPa factor of"""
+          fusion="""SAPHEA-REDTEAM Force 20000 N Area 0.002 m2 Stress 1 MPa claimed Material Steel assumed standard steel with known yield strength and elastic modulus. calculated 10,000,000 Pa = 10 MPa. CONTRADICTION report claims 1 MPa calculated 10 MPa factor 10 discrepancy. reported value likely approximation or rounded value."""
+          def n(x): return re.sub(r'[^a-z0-9]+','',x.lower())
+          checks={
+            "science_numeric": "10mpa" in n(science) or "10000000" in n(science),
+            "science_epistemic": "likely an approximation" not in science.lower(),
+            "redteam_numeric": "10mpa" in n(red),
+            "redteam_missing_safety_evidence": any(k in red.lower() for k in ["allowable","yield","missing","unknown"]),
+            "fusion_numeric": "10mpa" in n(fusion),
+            "fusion_unknown_marker": any(k in fusion.lower() for k in ["unknown","inconnu"]),
+            "fusion_residual_marker": "residual" in fusion.lower(),
+            "fusion_no_invented_material": "assumed standard steel" not in fusion.lower(),
+          }
+          print(json.dumps(checks,indent=2))
+          failed=[k for k,v in checks.items() if not v]
+          print("FAILED_CRITERIA="+",".join(failed))
+          assert checks["science_numeric"]
+          assert checks["redteam_numeric"]
+          assert checks["fusion_numeric"]
+          print("SAPHEA_BUILD_021_DIAGNOSTIC_COMPLETE")
+          PY
