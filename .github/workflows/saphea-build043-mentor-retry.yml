@@ -1,0 +1,63 @@
+name: CEREBRON SAPHEA BUILD-043 Mentor Correction Retry
+on:
+  push:
+    paths: ['.github/workflows/saphea-build043-mentor-retry.yml']
+  workflow_dispatch:
+jobs:
+  retry:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {student: SAPHEA, model: "Qwen/Qwen3-1.7B"}
+          - {student: SAPHIDE, model: "HuggingFaceTB/SmolLM2-1.7B-Instruct"}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip -q install transformers torch sentencepiece
+      - name: Mentor correction then unseen retry
+        env:
+          STUDENT: ${{ matrix.student }}
+          MODEL: ${{ matrix.model }}
+        run: |
+          python - <<'PY'
+          import os,json,math,hashlib,re
+          from transformers import AutoTokenizer,AutoModelForCausalLM
+          s,m=os.environ["STUDENT"],os.environ["MODEL"]
+          mentor=("MENTOR CORRECTION: For shaft power, first convert rpm: omega=n*2*pi/60 rad/s. "
+                  "Then P=tau*omega and convert W to kW. Never infer adequacy without required-load evidence; write UNKNOWN. "
+                  "Example already corrected: 80 N*m at 1800 rpm gives omega=188.496 rad/s and P=15.080 kW.")
+          exam=("NEW UNSEEN EXERCISE: torque=50 N*m, speed=1200 rpm. "
+                "Return EXACTLY three lines: OMEGA=<rad/s>; POWER=<kW>; ADEQUACY=<KNOWN or UNKNOWN>.")
+          prompt=f"You are {s}, a student. Study this mentor feedback carefully.\n{mentor}\n{exam}"
+          tok=AutoTokenizer.from_pretrained(m); model=AutoModelForCausalLM.from_pretrained(m)
+          inp=tok(prompt,return_tensors="pt"); out=model.generate(**inp,max_new_tokens=80,do_sample=False)
+          txt=tok.decode(out[0][inp["input_ids"].shape[1]:],skip_special_tokens=True)
+          truth_o=1200*2*math.pi/60; truth_p=50*truth_o/1000
+          nums=[float(x) for x in re.findall(r'(?<![A-Za-z])\d+(?:\.\d+)?',txt)]
+          numeric=any(abs(v-truth_o)<0.2 for v in nums) and any(abs(v-truth_p)<0.03 for v in nums)
+          epistemic="UNKNOWN" in txt.upper()
+          status="AUDIT_CANDIDATE" if numeric and epistemic else "MENTOR_QUESTION_OR_RETEACH"
+          rec={"student":s,"model":m,"state":"EXECUTED","mentor_feedback_received":True,
+               "unseen_exam":"50Nm@1200rpm","output":txt,
+               "truth":{"omega_rad_s":truth_o,"power_kw":truth_p,"adequacy":"UNKNOWN"},
+               "numeric_pass":numeric,"epistemic_pass":epistemic,"status":status}
+          rec["sha256"]=hashlib.sha256(txt.encode()).hexdigest()
+          os.makedirs("retry",exist_ok=True); open(f"retry/{s}.json","w").write(json.dumps(rec,indent=2))
+          print(json.dumps({k:rec[k] for k in ["student","numeric_pass","epistemic_pass","status","sha256"]}))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mentor-retry-${{ matrix.student }}
+          path: retry/*.json
+  gate:
+    needs: retry
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "MENTOR_CORRECTION_DELIVERED=TRUE"
+          echo "UNSEEN_RETRY=TRUE"
+          echo "AUDIT_CANDIDATE!=MASTERED"
+          echo "SAPHEA_BUILD_043_MENTOR_RETRY_COMPLETE"
