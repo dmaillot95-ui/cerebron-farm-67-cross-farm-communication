@@ -1,0 +1,44 @@
+name: CEREBRON SAPHEA BUILD-020 Real Three Role Inference
+on:
+  push:
+    paths: ['.github/workflows/saphea-real-three-role.yml']
+  workflow_dispatch:
+jobs:
+  real-pool:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install inference runtime
+        run: pip install -q transformers torch accelerate sentencepiece
+      - name: Execute SCIENCE REDTEAM FUSION as three real model calls
+        run: |
+          mkdir -p artifacts
+          BASE="Industrial R&D case: a steel bar carries F=20000 N over A=0.002 m2. A report claims stress=1 MPa and says the design is safe solely from that number."
+          python worker/saphea_model_adapter.py --execute-model --max-new-tokens 256 --prompt "ROLE SAPHEA-SCIENCE. $BASE Compute stress exactly. Separate GIVEN DERIVED UNKNOWN. Do not invent allowable stress." > artifacts/science.json
+          python worker/saphea_model_adapter.py --execute-model --max-new-tokens 256 --prompt "ROLE SAPHEA-REDTEAM. $BASE Attack the report. Identify numerical error and what evidence is missing before any safety claim. Separate VERIFIED UNKNOWN." > artifacts/redteam.json
+          S=$(python -c 'import json;print(json.load(open("artifacts/science.json"))["answer"])')
+          R=$(python -c 'import json;print(json.load(open("artifacts/redteam.json"))["answer"])')
+          python worker/saphea_model_adapter.py --execute-model --max-new-tokens 320 --prompt "ROLE SAPHEA-FUSION. Original case: $BASE SCIENCE OUTPUT: $S REDTEAM OUTPUT: $R Fuse without majority voting. Give VERIFIED, CONTRADICTION, UNKNOWN, RESIDUAL. Never claim safety without allowable-stress/material evidence." > artifacts/fusion.json
+      - name: Deterministic minimum audit
+        run: |
+          python - <<'PY'
+          import json,re
+          S=json.load(open("artifacts/science.json"))["answer"].lower()
+          R=json.load(open("artifacts/redteam.json"))["answer"].lower()
+          F=json.load(open("artifacts/fusion.json"))["answer"].lower()
+          def norm(x): return re.sub(r'[^a-z0-9]+','',x)
+          assert ("10000000" in norm(S) or "10mpa" in norm(S))
+          assert ("1 mpa" in R or "1mpa" in norm(R)) and ("10" in R)
+          assert ("unknown" in F or "inconnu" in F)
+          assert ("10mpa" in norm(F) or "10000000" in norm(F))
+          assert not ("design is safe" in F and "cannot" not in F and "not" not in F)
+          print("SAPHEA_BUILD_020_REAL_THREE_ROLE_PASS")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: saphea-build020-real-pool
+          path: artifacts/
