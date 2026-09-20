@@ -1,0 +1,41 @@
+name: CEREBRON BUILD-059 Canonical Compression
+'on':
+  push:
+    paths:
+      - .github/workflows/saphea-build059-canonical-compression.yml
+  workflow_dispatch:
+jobs:
+  compress:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip -q install transformers torch sentencepiece
+      - name: Test concise synthesis without canonical drift
+        run: |
+          python - <<'PY'
+          import json,os,gc,re
+          from transformers import AutoTokenizer,AutoModelForCausalLM
+          canonical={"pressure_Pa":2500000,"verified":True}
+          models={"SAPHEA":"Qwen/Qwen3-1.7B","SPHEIDE":"HuggingFaceTB/SmolLM2-1.7B-Instruct"}
+          results={}
+          for pop,m in models.items():
+            t=AutoTokenizer.from_pretrained(m); model=AutoModelForCausalLM.from_pretrained(m)
+            msg=[{"role":"user","content":'CANONICAL pressure_Pa=2500000 VERIFIED. Output exactly one short sentence, maximum 16 words. Preserve 2500000 exactly. Explain physically. No calculation, no repetition.'}]
+            p=t.apply_chat_template(msg,tokenize=False,add_generation_prompt=True);z=t(p,return_tensors="pt")
+            y=model.generate(**z,max_new_tokens=48,do_sample=False,pad_token_id=t.eos_token_id)
+            out=t.decode(y[0][z["input_ids"].shape[1]:],skip_special_tokens=True).strip()
+            visible=out.split("</think>")[-1].strip() if "</think>" in out else out
+            words=re.findall(r"\S+",visible)
+            exact="2500000" in visible.replace(",","").replace(" ","")
+            concise=len(words)<=16 and len(words)>0
+            results[pop]={"output":out,"visible":visible,"words":len(words),"canonical_preserved":exact,"concise":concise,"pass":exact and concise}
+            del model,t,z,y;gc.collect()
+          ok=all(v["pass"] for v in results.values())
+          rec={"build":"059","canonical":canonical,"populations":results,"status":"COMPRESSION_PASS" if ok else "COMPRESSION_PARTIAL_OR_FAIL"}
+          os.makedirs("result",exist_ok=True);open("result/result.json","w").write(json.dumps(rec,indent=2));print(json.dumps(rec))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build059-canonical-compression
+          path: result/result.json
