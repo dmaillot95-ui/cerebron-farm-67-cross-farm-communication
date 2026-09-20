@@ -1,4 +1,4 @@
-name: AGORA 5m Learning Cycle
+name: AGORA Recursive 5m Cycle
 on:
   workflow_dispatch:
   schedule:
@@ -6,23 +6,39 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: agora-5m-${{ github.repository }}
+  group: agora-recursive-${{ github.repository }}
   cancel-in-progress: false
 jobs:
-  checkpoint:
+  recursive-state:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
       - uses: actions/checkout@v4
-      - name: AGORA cycle
+      - uses: actions/cache/restore@v4
+        with:
+          path: .agora-state
+          key: agora-state-${{ github.repository }}-${{ github.run_id }}
+          restore-keys: |
+            agora-state-${{ github.repository }}-
+      - name: Build STATE(t+1)
         shell: bash
         run: |
-          mkdir -p agora
-          printf '{"repository":"%s","run_id":"%s","cycle":"5m","status":"CHECKPOINT_ONLY","claim":"workflow execution is not learning or proof"}\n' "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > agora/latest-cycle.json
-          cat agora/latest-cycle.json
-      - name: Publish checkpoint artifact
-        uses: actions/upload-artifact@v4
+          mkdir -p .agora-state
+          python - <<'PY'
+          import json,os
+          p=".agora-state/state.json"
+          try: parent=json.load(open(p))
+          except Exception: parent={}
+          state={"schema":"AGORA_RECURSIVE_STATE_V1","state_id":os.environ.get("GITHUB_REPOSITORY","repo")+":"+os.environ.get("GITHUB_RUN_ID","run"),"parent_state_id":parent.get("state_id","GENESIS"),"iteration":int(parent.get("iteration",0))+1,"resource":os.environ.get("GITHUB_REPOSITORY"),"status":"CHECKPOINT_PENDING_EVIDENCE","residual":parent.get("nextlock","BOOTSTRAP"),"claims":[],"evidence_ids":[],"questions":[],"errors":[],"anti_error_rules":parent.get("anti_error_rules",[]),"audit":"PENDING","red_team":"PENDING","reproduction":"PENDING","reality_gate":"PENDING","ablation":"PENDING","transfer":"PENDING","decision":"HOLD","nextlock":"COLLECT_REAL_OUTPUT","rule":"WORKFLOW_EXECUTION!=LEARNING!=PROOF"}
+          json.dump(state,open(p,"w"),indent=2)
+          PY
+          cat .agora-state/state.json
+      - uses: actions/cache/save@v4
         with:
-          name: agora-cycle-${{ github.run_id }}
-          path: agora/latest-cycle.json
-          retention-days: 7
+          path: .agora-state
+          key: agora-state-${{ github.repository }}-${{ github.run_id }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: recursive-state-${{ github.run_id }}
+          path: .agora-state/state.json
+          retention-days: 14
