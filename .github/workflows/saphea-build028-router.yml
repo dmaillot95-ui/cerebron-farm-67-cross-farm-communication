@@ -1,0 +1,13 @@
+name: CEREBRON SAPHEA BUILD-028 Anti Redundancy Router
+on:
+  push:
+    paths: ['worker/anti_redundancy_router.py','tests/test_anti_redundancy_router.py','.github/workflows/saphea-build028-router.yml']
+  workflow_dispatch:
+jobs:
+  router:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python tests/test_anti_redundancy_router.py
