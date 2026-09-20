@@ -1,0 +1,41 @@
+name: CEREBRON SAPHEA BUILD-010 Completion Retest
+on:
+  push:
+    paths: ['.github/workflows/saphea-completion-retest.yml']
+  workflow_dispatch:
+jobs:
+  completion-retest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install CPU model runtime
+        run: |
+          python -m pip install --upgrade pip
+          pip install "transformers>=4.51.0" torch accelerate safetensors
+      - name: Execute corrected SAPHEA inference
+        run: |
+          mkdir -p artifacts
+          python worker/saphea_model_adapter.py --execute-model --max-new-tokens 512 | tee artifacts/saphea-rd01-build010.json
+      - name: Deterministic completion audit
+        run: |
+          python - <<'PY'
+          import json,re
+          p=json.load(open("artifacts/saphea-rd01-build010.json"))
+          a=p["answer"]
+          assert p["status"]=="UNREVIEWED_MODEL_OUTPUT"
+          assert p["model_id"]=="Qwen/Qwen3-1.7B"
+          assert len(a)>200
+          # Required result: Q = 10*500*20 = 100000 J = 100 kJ.
+          norm=a.replace(",","").replace(" ","").lower()
+          value_ok=("100000" in norm) or ("100kj" in norm)
+          assert value_ok, "Expected thermal result 100000 J / 100 kJ not found"
+          assert ("j" in a.lower()), "Energy unit missing"
+          print("SAPHEA_BUILD_010_COMPLETION_PASS")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: saphea-rd01-build010-output
+          path: artifacts/saphea-rd01-build010.json
