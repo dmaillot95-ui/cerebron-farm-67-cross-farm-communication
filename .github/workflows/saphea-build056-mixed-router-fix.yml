@@ -1,0 +1,40 @@
+name: CEREBRON BUILD-056 Mixed Router Fix
+'on':
+  push:
+    paths:
+      - .github/workflows/saphea-build056-mixed-router-fix.yml
+  workflow_dispatch:
+jobs:
+  retest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Retest BUILD-055 cases with implicit-compute detection
+        run: |
+          python - <<'PY'
+          import json,os,re
+          cases=[
+            ("stress","A 3600 N load acts on 0.0009 m2. Calculate stress and explain whether the numerical step should be trusted without verification.",["DETERMINISTIC_TOOL","MODEL"]),
+            ("quadratic","Solve x**2-4=0 exactly and explain what the two roots mean.",["SYMBOLIC_TOOL","MODEL"]),
+            ("concept","Explain why provenance matters in an industrial R&D result.",["MODEL"]),
+            ("compare","Compute 125*48, then explain which of two designs is cheaper if the other costs 7000.",["DETERMINISTIC_TOOL","MODEL"])
+          ]
+          compute_words=("calculate","compute","evaluate","determine","stress","pressure","ratio","percentage","cost")
+          def route(s):
+            q=s.lower(); r=[]
+            symbolic=bool(re.search(r'\bsolve\b|x\*\*|equation|symbolic',q))
+            explicit=bool(re.search(r'\d',q)) and bool(re.search(r'[/*+]|\d\s*-\s*\d',q))
+            implicit=bool(re.search(r'\d',q)) and any(w in q for w in compute_words)
+            if symbolic:r.append("SYMBOLIC_TOOL")
+            elif explicit or implicit:r.append("DETERMINISTIC_TOOL")
+            if any(w in q for w in ("explain","mean","why","which")) or not r:r.append("MODEL")
+            return r
+          results=[{"id":i,"expected":e,"got":route(t),"pass":route(t)==e} for i,t,e in cases]
+          ok=all(x["pass"] for x in results)
+          out={"build":"056","retest_of":"055","change":"IMPLICIT_COMPUTE_DETECTION","results":results,"status":"RETEST_PASS" if ok else "RETEST_FAIL"}
+          os.makedirs("result",exist_ok=True);open("result/result.json","w").write(json.dumps(out,indent=2));print(json.dumps(out))
+          if not ok: raise SystemExit(1)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build056-mixed-router-fix
+          path: result/result.json
