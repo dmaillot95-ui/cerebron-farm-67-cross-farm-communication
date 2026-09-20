@@ -18,7 +18,7 @@ jobs:
         with: {python-version: '3.11'}
       - run: pip -q install transformers torch sentencepiece
       - name: Study C01 and take unseen exam
-        env: {STUDENT: "${{ matrix.student }}", MODEL: "${{ matrix.model }}"}
+        env:\n          STUDENT: ${{ matrix.student }}\n          MODEL: ${{ matrix.model }}
         run: |
           python - <<'PY'
           import os,json,re,hashlib
@@ -56,7 +56,7 @@ DIMENSION=<pressure dimension in base SI>"""
           print(json.dumps({"student":s,"checks":rec["checks"],"status":rec["status"]}))
           PY
       - uses: actions/upload-artifact@v4
-        with: {name: "academy-C01-${{ matrix.student }}", path: "academy/*.json"}
+        with:\n          name: academy-C01-${{ matrix.student }}\n          path: academy/*.json
   gate:
     needs: chapter
     runs-on: ubuntu-latest
