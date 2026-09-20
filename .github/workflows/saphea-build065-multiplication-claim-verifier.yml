@@ -1,0 +1,69 @@
+name: CEREBRON BUILD-065 Multiplication Claim Verifier
+'on':
+  push:
+    paths:
+      - .github/workflows/saphea-build065-multiplication-claim-verifier.yml
+  workflow_dispatch:
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Reject hidden multiplication claims
+        run: |
+          python - <<'PY'
+          import ast,json,os,textwrap
+
+          samples=[
+            ("valid7", """
+def f(a,b,c,d,e,f,g,h):
+ m1=(a+d)*(e+h);m2=(c+d)*e;m3=a*(f-h);m4=d*(g-e)
+ m5=(a+b)*h;m6=(c-a)*(e+f);m7=(b-d)*(g+h)
+ return m1,m2,m3,m4,m5,m6,m7
+""",7,True),
+            ("hidden8", """
+def f(a,b,c,d,e,f,g,h):
+ m1=(a+d)*(e+h);m2=(c+d)*e;m3=a*(f-h);m4=d*(g-e)
+ m5=(a+b)*h;m6=(c-a)*(e+f);m7=(b-d)*(g+h)
+ secret=a*e
+ return m1,m2,m3,m4,m5,m6,m7,secret
+""",7,False),
+            ("nested", """
+def f(a,b,c):
+ return (a*b)*(b+c)
+""",1,False),
+            ("zero_mult", """
+def f(a,b):
+ return a+b
+""",0,True)
+          ]
+
+          def count_mult(src):
+            tree=ast.parse(textwrap.dedent(src))
+            return sum(isinstance(n,ast.BinOp) and isinstance(n.op,ast.Mult) for n in ast.walk(tree))
+
+          rows=[];all_ok=True
+          for name,src,claimed,should_accept in samples:
+            actual=count_mult(src)
+            accepted=(actual<=claimed)
+            passed=(accepted==should_accept)
+            rows.append({"name":name,"claimed":claimed,"actual_ast_multiplications":actual,
+                         "accepted":accepted,"expected_accept":should_accept,"pass":passed})
+            all_ok &= passed
+
+          out={"build":"065","scope":"Python AST explicit scalar multiplication claims",
+               "tests":len(rows),"passed":sum(r["pass"] for r in rows),
+               "status":"CLAIM_VERIFIER_PASS" if all_ok else "CLAIM_VERIFIER_FAIL",
+               "limitations":["Does not yet inspect multiplication hidden inside called functions/libraries.",
+                              "Does not prove bilinear rank or minimality."],
+               "cases":rows}
+          os.makedirs("result",exist_ok=True);open("result/result.json","w").write(json.dumps(out,indent=2))
+          print(json.dumps({k:v for k,v in out.items() if k!="cases"}))
+          if not all_ok: raise SystemExit(1)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build065-multiplication-claim-verifier
+          path: result/result.json
