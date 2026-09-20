@@ -1,0 +1,52 @@
+name: CEREBRON SAPHEA BUILD-047 Mentor Reteach
+'on':
+  push:
+    paths:
+      - .github/workflows/saphea-build047-mentor-reteach.yml
+  workflow_dispatch:
+jobs:
+  reteach:
+    strategy:
+      fail-fast: false
+      matrix:
+        student:
+          - SAPHEA
+          - SAPHIDE
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install runtime
+        run: pip -q install transformers torch sentencepiece
+      - name: Mentor correction and retry
+        env:
+          STUDENT: ${{ matrix.student }}
+        run: |
+          python - <<'PY'
+          import os,json,hashlib
+          from transformers import AutoTokenizer,AutoModelForCausalLM
+          s=os.environ["STUDENT"]
+          m="Qwen/Qwen3-1.7B" if s=="SAPHEA" else "HuggingFaceTB/SmolLM2-1.7B-Instruct"
+          mentor="MENTOR CORRECTION: 2.4 kN = 2400 N. 600 mm2 = 0.0006 m2. Pressure = F/A = 4,000,000 Pa. Pressure dimension = kg m^-1 s^-2. Previous answer failed because it did not finish the requested calculation. On the retry, calculate silently and output only the final compact answer."
+          exam="UNSEEN RETRY: force 3.6 kN, area 900 mm2. Return exactly: F_N=<number>;A_M2=<number>;P_PA=<number>;DIM=kg*m^-1*s^-2"
+          prompt=mentor+" "+exam
+          t=AutoTokenizer.from_pretrained(m)
+          model=AutoModelForCausalLM.from_pretrained(m)
+          z=t(prompt,return_tensors="pt")
+          y=model.generate(**z,max_new_tokens=40,do_sample=False)
+          out=t.decode(y[0][z["input_ids"].shape[1]:],skip_special_tokens=True).strip()
+          low=out.lower().replace(",","").replace(" ","")
+          checks={"force":("3600" in low or "3.6e3" in low),"area":("0.0009" in low or "9e-4" in low),"pressure":("4000000" in low or "4e6" in low),"dimension":("kg" in low and "m" in low and "s" in low),"compact":len(out)<180}
+          status="AUDITOR_REQUIRED" if all(checks.values()) else "GPT_MENTOR_REQUIRED"
+          rec={"build":"047","student":s,"model":m,"mentor_correction_received":True,"unseen_retry":True,"output":out,"checks":checks,"status":status}
+          rec["sha256"]=hashlib.sha256(out.encode()).hexdigest()
+          os.makedirs("result",exist_ok=True)
+          open("result/result.json","w").write(json.dumps(rec,indent=2))
+          print(json.dumps({"student":s,"checks":checks,"status":status}))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build047-${{ matrix.student }}
+          path: result/result.json
