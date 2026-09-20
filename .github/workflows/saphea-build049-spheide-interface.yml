@@ -1,0 +1,42 @@
+name: CEREBRON BUILD-049 SPHEIDE Interface
+'on':
+  push:
+    paths:
+      - .github/workflows/saphea-build049-spheide-interface.yml
+  workflow_dispatch:
+jobs:
+  spheide:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip -q install transformers torch sentencepiece
+      - name: SPHEIDE native interface diagnostic
+        run: |
+          python - <<'PY'
+          import json,hashlib,os
+          from transformers import AutoTokenizer,AutoModelForCausalLM
+          m="HuggingFaceTB/SmolLM2-1.7B-Instruct"
+          t=AutoTokenizer.from_pretrained(m)
+          model=AutoModelForCausalLM.from_pretrained(m)
+          messages=[
+            {"role":"system","content":"Answer the current calculation only. Be concise. Do not enumerate steps."},
+            {"role":"user","content":"A force is 3.6 kN over 900 mm2. Give force in N, area in m2, pressure in Pa, and pressure base-SI dimension. One line."}
+          ]
+          prompt=t.apply_chat_template(messages,tokenize=False,add_generation_prompt=True)
+          z=t(prompt,return_tensors="pt")
+          y=model.generate(**z,max_new_tokens=96,do_sample=False,pad_token_id=t.eos_token_id)
+          out=t.decode(y[0][z["input_ids"].shape[1]:],skip_special_tokens=True).strip()
+          low=out.lower().replace(",","").replace(" ","")
+          checks={"force":"3600" in low,"area":("0.0009" in low or "9e-4" in low),"pressure":("4000000" in low or "4e6" in low),"dimension":("kg" in low and "m" in low and "s" in low)}
+          rec={"build":"049","population":"SPHEIDE","model":m,"chat_template":True,"max_new_tokens":96,"output":out,"checks":checks,"status":"INTERFACE_PASS" if all(checks.values()) else "INTERFACE_FAIL"}
+          rec["sha256"]=hashlib.sha256(out.encode()).hexdigest()
+          os.makedirs("result",exist_ok=True)
+          open("result/result.json","w").write(json.dumps(rec,indent=2))
+          print(json.dumps(rec))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build049-SPHEIDE
+          path: result/result.json
