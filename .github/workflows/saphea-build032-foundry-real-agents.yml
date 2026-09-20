@@ -1,0 +1,57 @@
+name: CEREBRON SAPHEA BUILD-032 Foundry Real Agents
+on:
+  push:
+    paths: ['.github/workflows/saphea-build032-foundry-real-agents.yml']
+  workflow_dispatch:
+jobs:
+  real-agents:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install inference runtime
+        run: pip install -q transformers torch accelerate sentencepiece
+      - name: Forge distinct agents
+        run: |
+          mkdir -p artifacts
+          python - <<'PY'
+          import sys,json
+          sys.path.insert(0,"worker")
+          from saphea_foundry import forge_distinct
+          mission="Given motor torque 120 N*m and speed 1500 rpm, derive mechanical power; challenge assumptions; identify what is unknown before declaring motor adequate."
+          specs=[("SCIENCE","DERIVE"),("REDTEAM","FALSIFY"),("AUDITOR","VERIFY")]
+          a=forge_distinct(mission,specs,"Qwen/Qwen3-1.7B")
+          json.dump(a,open("artifacts/agents.json","w"),indent=2)
+          assert len(a)==3
+          PY
+      - name: Execute three real model calls
+        run: |
+          python - <<'PY'
+          import json,subprocess,sys
+          agents=json.load(open("artifacts/agents.json"))
+          prompts={
+           "DERIVE":"Compact answer only. Compute P=tau*omega for torque 120 N*m, speed 1500 rpm. Return DERIVED and UNKNOWN. No invented data.",
+           "FALSIFY":"Compact RED TEAM. Check the power calculation for torque 120 N*m at 1500 rpm and list missing evidence before adequacy can be claimed.",
+           "VERIFY":"Compact independent audit. Recompute mechanical power from 120 N*m and 1500 rpm. State what the numbers alone cannot establish."
+          }
+          records=[]
+          for a in agents:
+            out=f'artifacts/{a["lane"].lower()}.json'
+            cmd=[sys.executable,"worker/saphea_model_adapter.py","--execute-model","--max-new-tokens","180","--prompt",prompts[a["lane"]]]
+            with open(out,"w") as f: subprocess.run(cmd,stdout=f,check=True)
+            payload=json.load(open(out))
+            raw=json.dumps(payload,sort_keys=True)
+            import hashlib
+            records.append({**a,"state":"EXECUTED","run_id":"GITHUB_ACTIONS_BUILD_032","output_sha256":hashlib.sha256(raw.encode()).hexdigest(),"output":payload})
+          json.dump(records,open("artifacts/executed_agents.json","w"),indent=2)
+          assert len(records)==3 and all(x["state"]=="EXECUTED" and x["output_sha256"] for x in records)
+          print("REAL_AGENT_CALLS=3")
+          print("SAPHEA_BUILD_032_FOUNDRY_REAL_AGENTS_PASS")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: saphea-build032-foundry-real-agents
+          path: artifacts/
