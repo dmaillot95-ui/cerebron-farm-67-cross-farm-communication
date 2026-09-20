@@ -1,0 +1,39 @@
+name: CEREBRON BUILD-050 SPHEIDE Generation Diagnostic
+'on':
+  push:
+    paths:
+      - .github/workflows/saphea-build050-spheide-generation-diagnostic.yml
+  workflow_dispatch:
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip -q install transformers torch sentencepiece
+      - name: Diagnose SPHEIDE generation
+        run: |
+          python - <<'PY'
+          import json,os,torch
+          from transformers import AutoTokenizer,AutoModelForCausalLM
+          m="HuggingFaceTB/SmolLM2-1.7B-Instruct"
+          t=AutoTokenizer.from_pretrained(m)
+          model=AutoModelForCausalLM.from_pretrained(m)
+          messages=[{"role":"user","content":"Reply with exactly this text: ALPHA BETA GAMMA"}]
+          prompt=t.apply_chat_template(messages,tokenize=False,add_generation_prompt=True)
+          z=t(prompt,return_tensors="pt")
+          y=model.generate(**z,max_new_tokens=24,do_sample=False,pad_token_id=t.eos_token_id,return_dict_in_generate=True)
+          new=y.sequences[0][z["input_ids"].shape[1]:]
+          tokens=new.tolist()
+          pieces=[t.decode([i],skip_special_tokens=False) for i in tokens]
+          decoded=t.decode(new,skip_special_tokens=True)
+          rec={"build":"050","population":"SPHEIDE","model":m,"prompt_tail":prompt[-300:],"eos_token_id":t.eos_token_id,"pad_token_id":t.pad_token_id,"new_token_ids":tokens,"token_pieces":pieces,"decoded":decoded,"generated_token_count":len(tokens),"status":"DIAGNOSTIC_ONLY"}
+          os.makedirs("result",exist_ok=True)
+          open("result/result.json","w").write(json.dumps(rec,indent=2))
+          print(json.dumps(rec))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build050-SPHEIDE-diagnostic
+          path: result/result.json
