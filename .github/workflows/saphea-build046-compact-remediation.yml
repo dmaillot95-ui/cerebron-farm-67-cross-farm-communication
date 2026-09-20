@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip -q install transformers torch sentencepiece
-      - name: Mentor remediation and compact unseen exam
+      - name: Compact remediation exam
         env:
           STUDENT: ${{ matrix.student }}
         run: |
