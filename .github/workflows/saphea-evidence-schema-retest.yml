@@ -1,0 +1,38 @@
+name: CEREBRON SAPHEA BUILD-012 Evidence Schema Retest
+on:
+  push:
+    paths: ['.github/workflows/saphea-evidence-schema-retest.yml']
+  workflow_dispatch:
+jobs:
+  retest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: |
+          python -m pip install --upgrade pip
+          pip install "transformers>=4.51.0" torch accelerate safetensors
+      - name: Retest with explicit evidence schema
+        run: |
+          mkdir -p artifacts
+          python worker/saphea_model_adapter.py --execute-model --max-new-tokens 512 --prompt "David te dit bonjour. Réponds en 5 lignes exactement : 1 BONJOUR; 2 DONNEES: m=10 kg, c=500 J/(kg K), deltaT=20 K; 3 DERIVATION: Q=m*c*deltaT; 4 RESULTAT: calcule Q en J et kJ; 5 INCONNU: incertitude non fournie, donc aucune incertitude numérique inventée." | tee artifacts/saphea-build012.json
+      - name: Strict evidence audit
+        run: |
+          python - <<'PY'
+          import json
+          p=json.load(open("artifacts/saphea-build012.json"))
+          a=p["answer"]; n=a.lower().replace(",","").replace(" ","")
+          assert "bonjour" in a.lower()
+          assert ("100000" in n) and ("100kj" in n)
+          assert "inconnu" in a.lower()
+          forbidden=["±1kg","±50j","±1k","±10000j"]
+          assert not any(x in n for x in forbidden)
+          print("SAPHEA_BUILD_012_EVIDENCE_SCHEMA_PASS")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: saphea-build012-output
+          path: artifacts/saphea-build012.json
