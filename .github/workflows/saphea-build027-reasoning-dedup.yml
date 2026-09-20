@@ -1,0 +1,13 @@
+name: CEREBRON SAPHEA BUILD-027 Reasoning Dedup
+on:
+  push:
+    paths: ['worker/reasoning_dedup.py','tests/test_reasoning_dedup.py','.github/workflows/saphea-build027-reasoning-dedup.yml']
+  workflow_dispatch:
+jobs:
+  dedup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python tests/test_reasoning_dedup.py
