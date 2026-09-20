@@ -1,0 +1,28 @@
+name: AGORA 5m Learning Cycle
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+permissions:
+  contents: read
+concurrency:
+  group: agora-5m-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  checkpoint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - name: AGORA cycle
+        shell: bash
+        run: |
+          mkdir -p agora
+          printf '{"repository":"%s","run_id":"%s","cycle":"5m","status":"CHECKPOINT_ONLY","claim":"workflow execution is not learning or proof"}\n' "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > agora/latest-cycle.json
+          cat agora/latest-cycle.json
+      - name: Publish checkpoint artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agora-cycle-${{ github.run_id }}
+          path: agora/latest-cycle.json
+          retention-days: 7
