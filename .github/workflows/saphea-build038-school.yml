@@ -1,0 +1,13 @@
+name: CEREBRON SAPHEA BUILD-038 School Mentor Loop
+on:
+  push:
+    paths: ['worker/saphea_school.py','tests/test_saphea_school.py','.github/workflows/saphea-build038-school.yml']
+  workflow_dispatch:
+jobs:
+  school-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python tests/test_saphea_school.py
