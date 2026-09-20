@@ -1,0 +1,46 @@
+name: CEREBRON BUILD-058 Real Dual Population Routed
+'on':
+  push:
+    paths:
+      - .github/workflows/saphea-build058-real-dual-population-routed.yml
+  workflow_dispatch:
+jobs:
+  real-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip -q install transformers torch sentencepiece
+      - name: Route compute then call SAPHEA and SPHEIDE
+        run: |
+          python - <<'PY'
+          import json,os,gc,torch
+          from transformers import AutoTokenizer,AutoModelForCausalLM
+          task="A 5000 N force acts over 0.002 m2. Determine the pressure and explain in one sentence what the value means."
+          tool={"force_N":5000,"area_m2":0.002,"pressure_Pa":5000/0.002,"verified":True}
+          canonical=json.dumps(tool,separators=(",",":"))
+          models={"SAPHEA":"Qwen/Qwen3-1.7B","SPHEIDE":"HuggingFaceTB/SmolLM2-1.7B-Instruct"}
+          results={}
+          for pop,m in models.items():
+            tok=AutoTokenizer.from_pretrained(m)
+            mod=AutoModelForCausalLM.from_pretrained(m)
+            msg=[{"role":"user","content":"Trusted canonical calculator record: "+canonical+"\nDo not recalculate or alter it. State the pressure value and explain in one short sentence what it means physically."}]
+            p=tok.apply_chat_template(msg,tokenize=False,add_generation_prompt=True)
+            z=tok(p,return_tensors="pt")
+            y=mod.generate(**z,max_new_tokens=80,do_sample=False,pad_token_id=tok.eos_token_id)
+            out=tok.decode(y[0][z["input_ids"].shape[1]:],skip_special_tokens=True).strip()
+            n=out.replace(",","").replace(" ","").lower()
+            exact=("2500000" in n or "2.5e6" in n)
+            results[pop]={"model":m,"output":out,"preserves_canonical_pressure":exact}
+            del mod,tok,z,y;gc.collect()
+          ok=all(v["preserves_canonical_pressure"] for v in results.values())
+          out={"build":"058","route":["DETERMINISTIC_TOOL","MODEL"],"canonical_tool_result":tool,"populations":results,
+               "status":"REAL_DUAL_PASS" if ok else "REAL_DUAL_PARTIAL_OR_FAIL",
+               "rule":"MODEL_INTERPRETS_CANONICAL_RESULT_MODEL_DOES_NOT_REPLACE_IT"}
+          os.makedirs("result",exist_ok=True);open("result/result.json","w").write(json.dumps(out,indent=2));print(json.dumps(out))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build058-real-dual-population
+          path: result/result.json
