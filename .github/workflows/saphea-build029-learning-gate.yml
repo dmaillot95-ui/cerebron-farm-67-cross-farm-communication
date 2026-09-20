@@ -1,0 +1,13 @@
+name: CEREBRON SAPHEA BUILD-029 Continuous Learning Gate
+on:
+  push:
+    paths: ['worker/continuous_learning_gate.py','tests/test_continuous_learning_gate.py','.github/workflows/saphea-build029-learning-gate.yml']
+  workflow_dispatch:
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python tests/test_continuous_learning_gate.py
