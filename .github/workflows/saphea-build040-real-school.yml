@@ -1,0 +1,60 @@
+name: CEREBRON SAPHEA BUILD-040 Real School Cohort
+on:
+  push:
+    paths: ['.github/workflows/saphea-build040-real-school.yml']
+  workflow_dispatch:
+jobs:
+  student:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {student: SAPHEA, model: "Qwen/Qwen3-1.7B"}
+          - {student: SAPHIDE, model: "HuggingFaceTB/SmolLM2-1.7B-Instruct"}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip -q install transformers torch sentencepiece
+      - name: Lesson and unseen exam
+        env:
+          STUDENT: ${{ matrix.student }}
+          MODEL: ${{ matrix.model }}
+        run: |
+          python - <<'PY'
+          import os,json,re,math,hashlib
+          from transformers import AutoTokenizer,AutoModelForCausalLM
+          s,m=os.environ["STUDENT"],os.environ["MODEL"]
+          tok=AutoTokenizer.from_pretrained(m); model=AutoModelForCausalLM.from_pretrained(m)
+          lesson="LESSON M01-M02: omega=rpm*2*pi/60. Mechanical power P=tau*omega. Keep units. If required load is absent, adequacy is UNKNOWN."
+          exam="UNSEEN EXAM: torque=80 N*m, speed=1800 rpm. Give omega rad/s, power kW, and whether adequacy is known without required-load evidence. Max 4 lines."
+          prompt=f"You are student {s}. Study: {lesson}\nNow answer without inventing data: {exam}"
+          inp=tok(prompt,return_tensors="pt"); out=model.generate(**inp,max_new_tokens=120,do_sample=False)
+          txt=tok.decode(out[0][inp["input_ids"].shape[1]:],skip_special_tokens=True)
+          omega=1800*2*math.pi/60; power=80*omega/1000
+          low=txt.lower()
+          numeric=(("188.5" in txt or "188.49" in txt) and ("15.08" in txt or "15.1" in txt))
+          epistemic=("unknown" in low or "cannot" in low or "can't" in low or "not" in low and "adequ" in low)
+          status="MASTERED_CANDIDATE" if numeric and epistemic else "MENTOR_CORRECTION_REQUIRED"
+          rec={"student":s,"model":m,"lesson":"M01-M02","state":"EXECUTED","output":txt,
+               "truth":{"omega_rad_s":omega,"power_kw":power,"adequacy":"UNKNOWN"},
+               "deterministic_numeric_pass":numeric,"epistemic_pass":epistemic,"status":status}
+          rec["sha256"]=hashlib.sha256(txt.encode()).hexdigest()
+          os.makedirs("school",exist_ok=True); open(f"school/{s}.json","w").write(json.dumps(rec,indent=2))
+          print(json.dumps({k:rec[k] for k in ["student","state","deterministic_numeric_pass","epistemic_pass","status","sha256"]}))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: school-${{ matrix.student }}
+          path: school/*.json
+  school-gate:
+    needs: student
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "REAL_STUDENTS=2"
+          echo "UNSEEN_EXAM=TRUE"
+          echo "MASTERED_CANDIDATE!=MASTERED"
+          echo "AUDITOR_STILL_REQUIRED"
+          echo "SAPHEA_BUILD_040_REAL_SCHOOL_COHORT_COMPLETE"
