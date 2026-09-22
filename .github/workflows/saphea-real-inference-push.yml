@@ -1,0 +1,35 @@
+name: CEREBRON SAPHEA BUILD-009 Real Model Inference
+on:
+  push:
+    paths: ['.github/workflows/saphea-real-inference-push.yml']
+  workflow_dispatch:
+jobs:
+  real-inference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install CPU model runtime
+        run: |
+          python -m pip install --upgrade pip
+          pip install "transformers>=4.51.0" torch accelerate safetensors
+      - name: Execute real SAPHEA candidate
+        run: |
+          mkdir -p artifacts
+          python worker/saphea_model_adapter.py --execute-model --max-new-tokens 160 | tee artifacts/saphea-rd01-real-output.json
+      - name: Verify execution marker
+        run: |
+          python - <<'PY'
+          import json
+          p=json.load(open("artifacts/saphea-rd01-real-output.json"))
+          assert p["status"]=="UNREVIEWED_MODEL_OUTPUT"
+          assert p["model_id"]=="Qwen/Qwen3-1.7B"
+          assert p["answer"].strip()
+          print("SAPHEA_BUILD_009_REAL_INFERENCE_PASS")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: saphea-rd01-build009-output
+          path: artifacts/saphea-rd01-real-output.json

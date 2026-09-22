@@ -1,0 +1,55 @@
+name: CEREBRON BUILD-066 Call Graph Multiplication Verifier
+on:
+  push:
+    paths:
+      - '.github/workflows/saphea-build066-callgraph-mult-verifier.yml'
+  workflow_dispatch:
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Count multiplications through local function calls
+        run: |
+          python - <<'PY'
+          import ast,json,os
+
+          cases=[
+            ("direct7", """def f(a,b):\n x=a*b\n y=a*b\n z=a*b\n u=a*b\n v=a*b\n w=a*b\n q=a*b\n return q""", "f", 7, True),
+            ("hidden_helper", """def helper(a,b):\n return a*b\ndef f(a,b):\n x=a*b\n y=a*b\n z=a*b\n u=a*b\n v=a*b\n w=a*b\n q=a*b\n return helper(q,b)""", "f", 7, False),
+            ("nested_helper", """def h(a,b):\n return a*b\ndef g(a,b):\n return h(a,b)+a*b\ndef f(a,b):\n return g(a,b)""", "f", 1, False),
+            ("add_only_helper", """def h(a,b):\n return a+b\ndef f(a,b):\n return h(a,b)""", "f", 0, True)
+          ]
+
+          def analyze(src,entry):
+            tree=ast.parse(src)
+            funcs={n.name:n for n in tree.body if isinstance(n,ast.FunctionDef)}
+            memo={}
+            visiting=set()
+            def cost(name):
+              if name in memo:return memo[name]
+              if name in visiting:raise ValueError("recursive call graph unsupported")
+              visiting.add(name); node=funcs[name]
+              direct=sum(isinstance(n,ast.BinOp) and isinstance(n.op,ast.Mult) for n in ast.walk(node))
+              calls=[n.func.id for n in ast.walk(node) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id in funcs]
+              total=direct+sum(cost(c) for c in calls)
+              visiting.remove(name);memo[name]=total;return total
+            return cost(entry)
+
+          rows=[]
+          for name,src,entry,claim,expected in cases:
+            actual=analyze(src,entry); accepted=actual<=claim
+            rows.append({"name":name,"claimed":claim,"actual_callgraph_mult":actual,"accepted":accepted,"expected":expected,"pass":accepted==expected})
+          passed=sum(r["pass"] for r in rows)
+          out={"build":"066","tests":len(rows),"passed":passed,"status":"CALLGRAPH_VERIFIER_PASS" if passed==len(rows) else "CALLGRAPH_VERIFIER_FAIL",
+               "limitations":["Local statically visible Python functions only","Dynamic dispatch/library/native operations not yet expanded","Does not prove tensor rank minimality"],"cases":rows}
+          os.makedirs("result",exist_ok=True);open("result/result.json","w").write(json.dumps(out,indent=2));print(json.dumps(out))
+          if passed!=len(rows):raise SystemExit(1)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build066-callgraph-mult-verifier
+          path: result/result.json

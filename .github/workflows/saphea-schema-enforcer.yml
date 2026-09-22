@@ -1,0 +1,29 @@
+name: CEREBRON SAPHEA BUILD-018 Schema Enforcer
+on:
+  push:
+    paths: ['.github/workflows/saphea-schema-enforcer.yml','worker/cerebron_schema_enforcer.py']
+  workflow_dispatch:
+jobs:
+  enforce:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test CEREBRON schema enforcement on BUILD-017 class output
+        run: |
+          mkdir -p artifacts
+          cat > artifacts/raw.json <<'EOF'
+          {"answer":"PROVENANCE_FOURNIE Assumptions: I am executed here as a candidate Qwen/Qwen3-1.7B. Several prompts have been submitted. External auditors have accepted or rejected outputs. No weight modification has been demonstrated. No persistent memory has been demonstrated. No information is provided about exact pretraining, fine-tuning, or history. Marked as: INCONNU"}
+          EOF
+          python worker/cerebron_schema_enforcer.py artifacts/raw.json artifacts/structured.json
+          python - <<'PY'
+          import json
+          p=json.load(open("artifacts/structured.json"))
+          for k in ["PROVENANCE_FOURNIE","DEDUCTION_AUTORISEE","INCONNU","INTERDIT_D_AFFIRMER"]: assert k in p
+          assert p["schema"]=="CEREBRON_EPISTEMIC_V1"
+          assert p["raw_model_output"]
+          print("SAPHEA_BUILD_018_SCHEMA_ENFORCER_PASS")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: saphea-build018
+          path: artifacts/

@@ -1,0 +1,13 @@
+name: CEREBRON SAPHEA BUILD-041 Mentor Question Queue
+on:
+  push:
+    paths: ['worker/mentor_question_queue.py','tests/test_mentor_question_queue.py','.github/workflows/saphea-build041-mentor-queue.yml']
+  workflow_dispatch:
+jobs:
+  mentor-queue:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python tests/test_mentor_question_queue.py

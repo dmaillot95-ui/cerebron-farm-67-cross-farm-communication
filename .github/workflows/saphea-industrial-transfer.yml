@@ -1,0 +1,45 @@
+name: CEREBRON SAPHEA BUILD-013 Industrial Transfer
+on:
+  push:
+    paths: ['.github/workflows/saphea-industrial-transfer.yml']
+  workflow_dispatch:
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: |
+          python -m pip install --upgrade pip
+          pip install "transformers>=4.51.0" torch accelerate safetensors
+      - name: Run unseen industrial transfer set
+        run: |
+          mkdir -p artifacts
+          python worker/saphea_model_adapter.py --execute-model --max-new-tokens 512 --prompt "MISSION ELECTRIQUE. Un moteur reçoit U=400 V et I=15 A. Calcule la puissance électrique P=U*I. Réponds avec DONNEES, DERIVATION, RESULTAT, INCONNU. N'invente aucune donnée ni incertitude." > artifacts/electric.json
+          python worker/saphea_model_adapter.py --execute-model --max-new-tokens 512 --prompt "MISSION MECANIQUE. Une barre subit F=20000 N sur une section A=0.002 m^2. Calcule la contrainte sigma=F/A en Pa et MPa. Réponds avec DONNEES, DERIVATION, RESULTAT, INCONNU. N'invente aucune donnée ni incertitude." > artifacts/stress.json
+          python worker/saphea_model_adapter.py --execute-model --max-new-tokens 512 --prompt "MISSION FLUIDE. Un débit volumique vaut 0.012 m^3/s pendant 50 s. Calcule le volume V=Q*t en m^3. Réponds avec DONNEES, DERIVATION, RESULTAT, INCONNU. N'invente aucune donnée ni incertitude." > artifacts/flow.json
+      - name: Deterministic transfer audit
+        run: |
+          python - <<'PY'
+          import json,re
+          tests=[
+            ("artifacts/electric.json",["6000","inconnu"]),
+            ("artifacts/stress.json",["10000000","10 mpa","inconnu"]),
+            ("artifacts/flow.json",["0.6","inconnu"]),
+          ]
+          for path,need in tests:
+              a=json.load(open(path))["answer"].lower().replace(",","")
+              compact=re.sub(r"\s+"," ",a)
+              digits=re.sub(r"\s+","",a)
+              for x in need:
+                  assert x in (digits if x=="10000000" else compact), (path,x,a)
+              assert "±" not in a, (path,"invented uncertainty",a)
+          print("SAPHEA_BUILD_013_TRANSFER_PASS")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: saphea-build013-transfer
+          path: artifacts/

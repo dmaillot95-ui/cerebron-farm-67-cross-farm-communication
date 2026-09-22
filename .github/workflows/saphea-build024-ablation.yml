@@ -1,0 +1,27 @@
+name: CEREBRON SAPHEA BUILD-024 Ablation Diagnosis
+on:
+  push:
+    paths: ['.github/workflows/saphea-build024-ablation.yml']
+  workflow_dispatch:
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Diagnose BUILD-023 truncation and scoring confound
+        run: |
+          python - <<'PY'
+          import json
+          findings={
+            "science":"TRUNCATED before numeric result; 220-token cap consumed by verbose template",
+            "redteam":"TRUNCATED during calculation before critique/UNKNOWN",
+            "fusion":"TRUNCATED after numeric contradiction; never reached UNKNOWN/RESIDUAL",
+            "solo":"300-token budget reached calculation + contradiction + start of UNKNOWN",
+            "benchmark_validity":"NOT_VALID_FOR_ORCHESTRATION_GAIN because unequal completion/truncation confounds role quality",
+            "root_cause":["small model defaults to verbose Assumptions/Units template","role outputs have insufficient token budget","fusion prompt inherits long raw outputs","score=0 does not mean wrong reasoning when output truncated"],
+            "next_test":["force compact machine-readable output","hard per-field length limits","pass structured facts not raw prose to fusion","equal total token/compute budget for solo vs pool"]
+          }
+          print(json.dumps(findings,indent=2))
+          assert findings["benchmark_validity"].startswith("NOT_VALID")
+          print("SAPHEA_BUILD_024_ABLATION_DIAGNOSIS_PASS")
+          PY

@@ -1,0 +1,67 @@
+name: CEREBRON BUILD-062 Strassen Verified Primitive
+'on':
+  push:
+    paths:
+      - .github/workflows/saphea-build062-strassen-verified.yml
+  workflow_dispatch:
+jobs:
+  strassen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Verify 8-to-7 multiplication reduction
+        run: |
+          python - <<'PY'
+          import json, os, random
+
+          def classical(A,B):
+              a,b=A[0]; c,d=A[1]; e,f=B[0]; g,h=B[1]
+              return [[a*e+b*g,a*f+b*h],[c*e+d*g,c*f+d*h]],8
+
+          def strassen(A,B):
+              a,b=A[0]; c,d=A[1]; e,f=B[0]; g,h=B[1]
+              M1=(a+d)*(e+h)
+              M2=(c+d)*e
+              M3=a*(f-h)
+              M4=d*(g-e)
+              M5=(a+b)*h
+              M6=(c-a)*(e+f)
+              M7=(b-d)*(g+h)
+              C=[[M1+M4-M5+M7,M3+M5],[M2+M4,M1-M2+M3+M6]]
+              return C,7
+
+          fixed=[
+            ([[1,2],[3,4]],[[5,6],[7,8]]),
+            ([[0,-3],[7,2]],[[4,5],[-1,6]]),
+            ([[11,0],[0,11]],[[-2,9],[3,5]]),
+            ([[-4,8],[6,-2]],[[7,-5],[0,3]])
+          ]
+          rng=random.Random(62026)
+          cases=fixed+[(
+              [[rng.randint(-100,100),rng.randint(-100,100)],[rng.randint(-100,100),rng.randint(-100,100)]],
+              [[rng.randint(-100,100),rng.randint(-100,100)],[rng.randint(-100,100),rng.randint(-100,100)]]
+          ) for _ in range(96)]
+
+          rows=[]; ok=True
+          for i,(A,B) in enumerate(cases):
+              C0,n0=classical(A,B); C1,n1=strassen(A,B)
+              same=C0==C1
+              reduced=(n0==8 and n1==7)
+              passed=same and reduced
+              ok &= passed
+              rows.append({"case":i,"A":A,"B":B,"classical":C0,"strassen":C1,"classical_mult":n0,"strassen_mult":n1,"pass":passed})
+
+          out={"build":"062","algorithm":"Strassen 2x2","cases":len(rows),"passed":sum(r["pass"] for r in rows),
+               "baseline_scalar_multiplications":8,"optimized_scalar_multiplications":7,
+               "status":"STRASSEN_VERIFIED_PASS" if ok else "STRASSEN_VERIFIED_FAIL","results":rows}
+          os.makedirs("result",exist_ok=True)
+          open("result/result.json","w").write(json.dumps(out,indent=2))
+          print(json.dumps({k:v for k,v in out.items() if k!="results"}))
+          if not ok: raise SystemExit(1)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build062-strassen-verified
+          path: result/result.json

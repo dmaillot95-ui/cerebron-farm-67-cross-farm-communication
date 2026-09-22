@@ -1,0 +1,13 @@
+name: CEREBRON SAPHEA BUILD-031 Foundry
+on:
+  push:
+    paths: ['worker/saphea_foundry.py','tests/test_saphea_foundry.py','.github/workflows/saphea-build031-foundry.yml']
+  workflow_dispatch:
+jobs:
+  foundry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python tests/test_saphea_foundry.py

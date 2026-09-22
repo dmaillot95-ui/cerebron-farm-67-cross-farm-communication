@@ -1,0 +1,29 @@
+name: CEREBRON SAPHEA BUILD-019 Logical Pool
+on:
+  push:
+    paths: ['.github/workflows/saphea-logical-pool.yml','worker/saphea_pool.py']
+  workflow_dispatch:
+jobs:
+  pool:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build 3-role pool over one shared physical model
+        run: |
+          mkdir -p artifacts
+          python worker/saphea_pool.py "Analyse R&D industrielle: verifier calcul, attaquer hypotheses, fusionner residual." > artifacts/pool.json
+          python - <<'PY'
+          import json
+          p=json.load(open("artifacts/pool.json"))
+          assert len(p)==3
+          assert len({x["saphea_id"] for x in p})==3
+          assert len({x["shared_physical_model"] for x in p})==1
+          assert all(x["status"]=="ROUTED_NOT_EXECUTED" for x in p)
+          assert all("SAME_MODEL!=INDEPENDENT_EVIDENCE" in x["rules"] for x in p)
+          assert len({x["packet_hash"] for x in p})==3
+          print("SAPHEA_BUILD_019_LOGICAL_POOL_PASS")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: saphea-build019-pool
+          path: artifacts/pool.json

@@ -1,0 +1,26 @@
+{
+  "id": "AFAH-CAPABILITY-GAP-001",
+  "name": "CAPABILITY GAP -> CREATE OR ACQUIRE",
+  "status": "ARCHITECTURE_RULE",
+  "scope": "ALL_AFAH_WORK",
+  "rule": "NEED -> DETECT_GAP -> SEARCH_EXISTING_CAPABILITY -> COMPOSE -> CREATE_IF_NEEDED -> TEST -> RED_TEAM -> VALIDATE -> INTEGRATE_OR_REJECT",
+  "requirements": [
+    "Apply to every AFAH/CEREBRON mission, colony, model, tool and R&D program.",
+    "Prefer reuse or composition before creating a new capability.",
+    "Create a new tool, specialist, colony, representation, test or interface only when a measured residual gap justifies it.",
+    "A created capability is a candidate, never proof of improvement.",
+    "Benchmark before/after; ablate; test transfer and regression.",
+    "Send claims through provenance, contradiction tracking and F72 Reality Gate.",
+    "Accepted capability enters controlled memory/learning through F59/F74; failed attempts enter the Failure Bank.",
+    "Respect resources, permissions, safety constraints and physical feasibility."
+  ],
+  "linked_principles": [
+    "REALITY>COHERENCE",
+    "EVIDENCE>CONFIDENCE",
+    "VERIFY_BEFORE_COMMIT",
+    "ABLATION_BEFORE_ADDITION",
+    "ARROW_TRADEOFF",
+    "ANTICIPATE_BEFORE_SCALE"
+  ],
+  "evidence_ceiling": "ARCHITECTURE_DECLARATION_NOT_CAPABILITY_PROOF"
+}

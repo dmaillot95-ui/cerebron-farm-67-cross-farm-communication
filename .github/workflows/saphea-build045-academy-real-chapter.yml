@@ -1,0 +1,60 @@
+name: CEREBRON SAPHEA BUILD-045 Academy First Real Chapter
+'on':
+  push:
+    paths:
+      - .github/workflows/saphea-build045-academy-real-chapter.yml
+  workflow_dispatch:
+jobs:
+  chapter:
+    strategy:
+      fail-fast: false
+      matrix:
+        student:
+          - SAPHEA
+          - SAPHIDE
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install runtime
+        run: pip -q install transformers torch sentencepiece
+      - name: Run real C01 exam
+        env:
+          STUDENT: ${{ matrix.student }}
+        run: |
+          python - <<'PY'
+          import os,json,math,hashlib,re
+          from transformers import AutoTokenizer,AutoModelForCausalLM
+          s=os.environ["STUDENT"]
+          m="Qwen/Qwen3-1.7B" if s=="SAPHEA" else "HuggingFaceTB/SmolLM2-1.7B-Instruct"
+          lesson="C01: SI units. k=1000. 1 mm=0.001 m, therefore square units must also be squared. Pressure=force/area. Check dimensions. Do not invent precision."
+          exam="UNSEEN: force 3.2 kN, area 800 mm^2. Give FORCE_N, AREA_M2, PRESSURE_PA, and pressure base-SI dimension. Four short lines only."
+          prompt=lesson+"\n"+exam
+          t=AutoTokenizer.from_pretrained(m)
+          model=AutoModelForCausalLM.from_pretrained(m)
+          z=t(prompt,return_tensors="pt")
+          y=model.generate(**z,max_new_tokens=96,do_sample=False)
+          out=t.decode(y[0][z["input_ids"].shape[1]:],skip_special_tokens=True)
+          low=out.lower().replace(",","")
+          checks={"force":("3200" in low or "3.2e3" in low),
+                  "area":("0.0008" in low or "8e-4" in low),
+                  "pressure":("4000000" in low or "4e6" in low),
+                  "dimension":("pa" in low or ("kg" in low and "s" in low))}
+          status="AUDITOR_REQUIRED" if all(checks.values()) else "GPT_MENTOR_REQUIRED"
+          rec={"student":s,"model":m,"chapter":"C01","state":"EXECUTED","output":out,"checks":checks,"status":status}
+          rec["sha256"]=hashlib.sha256(out.encode()).hexdigest()
+          os.makedirs("academy",exist_ok=True)
+          open("academy/result.json","w").write(json.dumps(rec,indent=2))
+          print(json.dumps({"student":s,"checks":checks,"status":status}))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: academy-C01-${{ matrix.student }}
+          path: academy/result.json
+  gate:
+    needs: chapter
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo SAPHEA_BUILD_045_ACADEMY_REAL_CHAPTER_COMPLETE

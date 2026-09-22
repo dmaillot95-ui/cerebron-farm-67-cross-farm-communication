@@ -1,0 +1,13 @@
+name: CEREBRON SAPHEA BUILD-044 Academy
+on:
+  push:
+    paths: ['worker/saphea_academy.py','tests/test_saphea_academy.py','.github/workflows/saphea-build044-academy.yml']
+  workflow_dispatch:
+jobs:
+  academy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python tests/test_saphea_academy.py

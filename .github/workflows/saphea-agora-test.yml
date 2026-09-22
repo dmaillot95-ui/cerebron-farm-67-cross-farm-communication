@@ -1,0 +1,13 @@
+name: CEREBRON F67 SAPHEA Agora BUILD-005
+on:
+  push:
+    paths: ['worker/agora_runtime.py','worker/saphea_rd01.py','tests/test_saphea_agora.py','.github/workflows/saphea-agora-test.yml']
+  workflow_dispatch:
+jobs:
+  saphea-agora-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python tests/test_saphea_agora.py

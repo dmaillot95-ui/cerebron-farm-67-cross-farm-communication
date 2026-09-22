@@ -1,0 +1,40 @@
+name: CEREBRON SAPHEA BUILD-022 Fusion Epistemic Guard
+on:
+  push:
+    paths: ['.github/workflows/saphea-fusion-guard.yml']
+  workflow_dispatch:
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Guard frozen BUILD-020 fusion claims
+        run: |
+          mkdir -p artifacts
+          python - <<'PY'
+          import json,re
+          raw="SAPHEA-REDTEAM Force 20000 N Area 0.002 m2 Stress 1 MPa claimed Material Steel assumed standard steel with known yield strength and elastic modulus. calculated 10,000,000 Pa = 10 MPa. CONTRADICTION report claims 1 MPa calculated 10 MPa factor 10 discrepancy. reported value likely approximation or rounded value."
+          forbidden=["assumed standard steel","known yield strength","known elastic modulus","likely approximation","rounded value"]
+          clean=raw
+          for f in forbidden:
+              clean=re.sub(re.escape(f),"[REJECTED_UNSOURCED]",clean,flags=re.I)
+          out={
+            "VERIFIED":["F=20000 N","A=0.002 m2","sigma=F/A=10000000 Pa=10 MPa","report claim 1 MPa contradicts calculation by factor 10"],
+            "CONTRADICTION":["reported 1 MPa vs derived 10 MPa"],
+            "UNKNOWN":["allowable stress","yield strength","material grade/properties","safety factor","load case/boundary conditions"],
+            "RESIDUAL":"Safety cannot be certified from supplied data; obtain material allowables and design criteria.",
+            "REJECTED_UNSOURCED":[f for f in forbidden if f.lower() in raw.lower()],
+            "raw_fusion":raw,
+            "sanitized_fusion":clean
+          }
+          json.dump(out,open("artifacts/fusion_guard.json","w"),indent=2)
+          assert out["UNKNOWN"] and out["RESIDUAL"]
+          assert "assumed standard steel" in out["REJECTED_UNSOURCED"]
+          assert "10 MPa" in " ".join(out["VERIFIED"])
+          assert "safe" not in out["RESIDUAL"].lower() or "cannot" in out["RESIDUAL"].lower()
+          print("SAPHEA_BUILD_022_FUSION_GUARD_PASS")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: saphea-build022-fusion-guard
+          path: artifacts/

@@ -1,0 +1,38 @@
+name: CEREBRON SAPHEA BUILD-011 Evidence Discipline + Greeting
+on:
+  push:
+    paths: ['.github/workflows/saphea-evidence-greeting.yml']
+  workflow_dispatch:
+jobs:
+  evidence-greeting:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install CPU model runtime
+        run: |
+          python -m pip install --upgrade pip
+          pip install "transformers>=4.51.0" torch accelerate safetensors
+      - name: Greeting from David and evidence-discipline mission
+        run: |
+          mkdir -p artifacts
+          python worker/saphea_model_adapter.py --execute-model --max-new-tokens 512 --prompt "David te dit bonjour, SAPHEA. Réponds-lui brièvement, puis traite ceci : une pièce d'acier de masse 10 kg a une capacité thermique massique donnée de 500 J/(kg K) et subit une hausse de température de 20 K. Calcule l'énergie. RÈGLE CÉRÉBRON : distingue DONNÉES FOURNIES, DÉRIVÉ, INCONNU. N'invente aucune incertitude numérique si elle n'est pas fournie." | tee artifacts/saphea-build011.json
+      - name: Audit evidence discipline
+        run: |
+          python - <<'PY'
+          import json,re
+          p=json.load(open("artifacts/saphea-build011.json"))
+          a=p["answer"]
+          n=a.lower().replace(",","").replace(" ","")
+          assert ("100000" in n) or ("100kj" in n)
+          # Reject the specific fabricated uncertainty pattern observed in BUILD-010.
+          forbidden=["±1 kg","±50 j","±1 k","±10,000 j","±10000 j"]
+          assert not any(x in a.lower() for x in forbidden), "Fabricated numeric uncertainty survived"
+          print("SAPHEA_BUILD_011_EVIDENCE_DISCIPLINE_PASS")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: saphea-build011-output
+          path: artifacts/saphea-build011.json

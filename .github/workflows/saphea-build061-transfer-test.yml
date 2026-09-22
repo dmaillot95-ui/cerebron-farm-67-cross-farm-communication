@@ -1,0 +1,50 @@
+name: CEREBRON BUILD-061 SAPHEA Transfer Test
+'on':
+  push:
+    paths:
+      - .github/workflows/saphea-build061-transfer-test.yml
+  workflow_dispatch:
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip -q install transformers torch sentencepiece
+      - name: Test unseen canonical values
+        run: |
+          python - <<'PY'
+          import json,os,re
+          from transformers import AutoTokenizer,AutoModelForCausalLM
+          m="Qwen/Qwen3-1.7B"
+          t=AutoTokenizer.from_pretrained(m); model=AutoModelForCausalLM.from_pretrained(m)
+          cases=[
+            ("force_N",7200,"N","force"),
+            ("energy_J",135000,"J","energy"),
+            ("power_W",48000,"W","power"),
+            ("temperature_K",315,"K","temperature"),
+            ("speed_m_s",125,"m/s","speed"),
+          ]
+          rows=[]
+          for key,val,unit,meaning in cases:
+            msg=[{"role":"user","content":f"CANONICAL {key}={val} VERIFIED. In one sentence of at most 16 words, state the value with unit {unit} and say it represents {meaning}. Do not recalculate."}]
+            try:p=t.apply_chat_template(msg,tokenize=False,add_generation_prompt=True,enable_thinking=False)
+            except TypeError:p=t.apply_chat_template(msg,tokenize=False,add_generation_prompt=True)
+            z=t(p,return_tensors="pt")
+            y=model.generate(**z,max_new_tokens=40,do_sample=False,pad_token_id=t.eos_token_id)
+            raw=t.decode(y[0][z["input_ids"].shape[1]:],skip_special_tokens=True).strip()
+            final=raw.split("</think>")[-1].strip() if "</think>" in raw else raw
+            compact=final.replace(",","").replace(" ","")
+            words=re.findall(r"\S+",final)
+            ok=str(val) in compact and unit.lower() in final.lower() and meaning.lower() in final.lower() and "<think>" not in final.lower() and 0<len(words)<=16
+            rows.append({"key":key,"expected":val,"final":final,"words":len(words),"pass":ok})
+          passed=sum(x["pass"] for x in rows)
+          out={"build":"061","population":"SAPHEA","model":m,"passed":passed,"total":len(rows),"status":"TRANSFER_PASS" if passed==len(rows) else "TRANSFER_FAIL","cases":rows}
+          os.makedirs("result",exist_ok=True);open("result/result.json","w").write(json.dumps(out,indent=2));print(json.dumps(out))
+          if passed!=len(rows): raise SystemExit(1)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build061-saphea-transfer-test
+          path: result/result.json

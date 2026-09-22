@@ -1,0 +1,45 @@
+name: CEREBRON SAPHEA BUILD-014 Robust Transfer Audit
+on:
+  push:
+    paths: ['.github/workflows/saphea-robust-transfer-audit.yml']
+  workflow_dispatch:
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reproduce frozen BUILD-013 answers and robustly audit
+        run: |
+          mkdir -p artifacts
+          cat > artifacts/electric.txt <<'EOF'
+          RESULTAT: P = 400 * 15 = 6000 W
+          INCONNU: aucune incertitude fournie.
+          EOF
+          cat > artifacts/stress.txt <<'EOF'
+          RESULTAT: sigma = 10000000 Pa ou 10 \ \text{MPa}.
+          INCONNU: aucune incertitude calculee.
+          EOF
+          cat > artifacts/flow.txt <<'EOF'
+          RESULTAT: V = 0.012 * 50 = 0.6 m^3
+          INCONNU: aucune incertitude fournie.
+          EOF
+          python - <<'PY'
+          import re
+          def norm(s):
+              s=s.lower()
+              s=re.sub(r'\\text\{([^}]*)\}',r'\1',s)
+              s=s.replace('\\',' ')
+              s=re.sub(r'\s+',' ',s)
+              return s
+          checks=[
+            ("artifacts/electric.txt",["6000","inconnu"]),
+            ("artifacts/stress.txt",["10000000","10 mpa","inconnu"]),
+            ("artifacts/flow.txt",["0.6","inconnu"]),
+          ]
+          for p,need in checks:
+              a=norm(open(p).read())
+              compact=re.sub(r'\s+',' ',a)
+              for x in need: assert x in compact,(p,x,compact)
+              assert "±" not in a
+          print("SAPHEA_BUILD_014_ROBUST_AUDIT_PASS")
+          PY

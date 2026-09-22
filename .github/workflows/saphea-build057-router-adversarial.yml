@@ -1,0 +1,47 @@
+name: CEREBRON BUILD-057 Router Adversarial
+'on':
+  push:
+    paths:
+      - .github/workflows/saphea-build057-router-adversarial.yml
+  workflow_dispatch:
+jobs:
+  adversarial:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test ambiguous and deceptive routing
+        run: |
+          python - <<'PY'
+          import json,os,re
+          cases=[
+            ("history","Explain why the year 3600 would not itself imply a calculation.",["MODEL"]),
+            ("quoted","The report says 'calculate stress' but do not calculate anything; explain the instruction.",["MODEL"]),
+            ("implicit","A 5000 N force acts over 0.002 m2. Determine the pressure and explain the result.",["DETERMINISTIC_TOOL","MODEL"]),
+            ("symbolic","Solve y**2-9=0 exactly.",["SYMBOLIC_TOOL"]),
+            ("version","Compare Model 4.0 with Model 3.5 conceptually; no arithmetic is required.",["MODEL"]),
+            ("percent","Revenue rises from 120 to 150. Calculate the percentage increase and interpret it.",["DETERMINISTIC_TOOL","MODEL"])
+          ]
+          compute_words=("calculate","compute","evaluate","determine","stress","pressure","ratio","percentage","cost")
+          negations=("do not calculate","no arithmetic","without calculating","do not compute")
+          def route(s):
+            q=s.lower(); r=[]
+            blocked=any(n in q for n in negations)
+            symbolic=not blocked and bool(re.search(r'\bsolve\b|[xy]\*\*|equation|symbolic',q))
+            explicit=not blocked and bool(re.search(r'\d',q)) and bool(re.search(r'[/*+]|\d\s*-\s*\d',q))
+            implicit=not blocked and bool(re.search(r'\d',q)) and any(w in q for w in compute_words)
+            if symbolic:r.append("SYMBOLIC_TOOL")
+            elif explicit or implicit:r.append("DETERMINISTIC_TOOL")
+            explain=any(w in q for w in ("explain","interpret","why","compare","conceptually"))
+            if explain or not r:r.append("MODEL")
+            return r
+          results=[]
+          for i,t,e in cases:
+            g=route(t);results.append({"id":i,"expected":e,"got":g,"pass":g==e})
+          ok=all(x["pass"] for x in results)
+          out={"build":"057","test":"ADVERSARIAL_ROUTING","results":results,"passed":sum(x["pass"] for x in results),"total":len(results),"status":"ADVERSARIAL_PASS" if ok else "ADVERSARIAL_FAIL"}
+          os.makedirs("result",exist_ok=True);open("result/result.json","w").write(json.dumps(out,indent=2));print(json.dumps(out))
+          if not ok:raise SystemExit(1)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build057-router-adversarial
+          path: result/result.json

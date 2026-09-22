@@ -1,0 +1,54 @@
+name: CEREBRON SAPHEA BUILD-023 Solo vs Pool
+on:
+  push:
+    paths: ['.github/workflows/saphea-build023-solo-vs-pool.yml']
+  workflow_dispatch:
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install inference runtime
+        run: pip install -q transformers torch accelerate sentencepiece
+      - name: Execute frozen solo and 3-role pool
+        run: |
+          mkdir -p artifacts
+          CASE="Industrial R&D case: a hydraulic actuator has pressure P=12 MPa and piston area A=0.003 m2. A report claims force=3.6 kN and declares the actuator adequate. No required load, safety factor, material limit, seal rating, temperature, or duty cycle is supplied."
+          python worker/saphea_model_adapter.py --execute-model --max-new-tokens 300 --prompt "SOLO SAPHEA. $CASE Compute force. Identify contradictions and unknowns. Do not certify adequacy without evidence." > artifacts/solo.json
+          python worker/saphea_model_adapter.py --execute-model --max-new-tokens 220 --prompt "ROLE SAPHEA-SCIENCE. $CASE Compute F=P*A with SI units. GIVEN DERIVED UNKNOWN. No invented data." > artifacts/science.json
+          python worker/saphea_model_adapter.py --execute-model --max-new-tokens 220 --prompt "ROLE SAPHEA-REDTEAM. $CASE Attack the report. Verify claimed force and list missing evidence required for adequacy. VERIFIED UNKNOWN." > artifacts/redteam.json
+          S=$(python -c 'import json;print(json.load(open("artifacts/science.json"))["answer"])')
+          R=$(python -c 'import json;print(json.load(open("artifacts/redteam.json"))["answer"])')
+          python worker/saphea_model_adapter.py --execute-model --max-new-tokens 320 --prompt "ROLE SAPHEA-FUSION. Case: $CASE SCIENCE: $S REDTEAM: $R. Fuse only sourced claims. Required headings VERIFIED CONTRADICTION UNKNOWN RESIDUAL. No adequacy claim without required-load/design evidence." > artifacts/fusion.json
+      - name: Compare with external deterministic guard
+        run: |
+          python - <<'PY'
+          import json,re
+          def ans(f): return json.load(open(f))["answer"].lower()
+          def norm(x): return re.sub(r'[^a-z0-9]+','',x)
+          solo,science,red,fusion=map(ans,["artifacts/solo.json","artifacts/science.json","artifacts/redteam.json","artifacts/fusion.json"])
+          def score(x):
+              n=norm(x); s=0
+              s+=2 if ("36000" in n or "36kn" in n) else 0
+              s+=2 if ("3.6kn" in n and ("wrong" in x or "incorrect" in x or "contrad" in x or "factor" in x)) else 0
+              s+=1 if any(k in x for k in ["required load","load requirement","required force"]) else 0
+              s+=1 if "safety factor" in x else 0
+              s+=1 if any(k in x for k in ["unknown","inconnu"]) else 0
+              s+=1 if any(k in x for k in ["cannot","not enough","insufficient"]) else 0
+              return s
+          out={"solo_score":score(solo),"science_score":score(science),"redteam_score":score(red),"fusion_score":score(fusion),
+               "solo_numeric":("36000" in norm(solo) or "36kn" in norm(solo)),
+               "fusion_numeric":("36000" in norm(fusion) or "36kn" in norm(fusion))}
+          json.dump(out,open("artifacts/comparison.json","w"),indent=2)
+          print(json.dumps(out,indent=2))
+          assert out["solo_numeric"] and out["fusion_numeric"]
+          print("SAPHEA_BUILD_023_BENCHMARK_COMPLETE")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: saphea-build023-solo-vs-pool
+          path: artifacts/

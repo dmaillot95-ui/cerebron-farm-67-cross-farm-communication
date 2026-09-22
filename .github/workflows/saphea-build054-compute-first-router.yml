@@ -1,0 +1,40 @@
+name: CEREBRON BUILD-054 Compute First Router
+'on':
+  push:
+    paths:
+      - .github/workflows/saphea-build054-compute-first-router.yml
+  workflow_dispatch:
+jobs:
+  router-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test deterministic compute-first routing
+        run: |
+          python - <<'PY'
+          import json, os
+          cases=[
+            {"id":"numeric_exact","task":"3600/0.0009","expected":"DETERMINISTIC_TOOL"},
+            {"id":"conceptual","task":"Explain why provenance matters","expected":"MODEL"},
+            {"id":"symbolic_exact","task":"solve x**2-4=0 exactly","expected":"SYMBOLIC_TOOL"},
+          ]
+          def route(task):
+            s=task.lower()
+            if "solve " in s or "symbolic" in s: return "SYMBOLIC_TOOL"
+            if any(ch.isdigit() for ch in s) and any(op in s for op in ["/","*","+","-"]): return "DETERMINISTIC_TOOL"
+            return "MODEL"
+          results=[]
+          for x in cases:
+            got=route(x["task"])
+            results.append({**x,"got":got,"pass":got==x["expected"]})
+          ok=all(x["pass"] for x in results)
+          out={"build":"054","rule":"COMPUTE_FIRST","results":results,"status":"ROUTER_PASS" if ok else "ROUTER_FAIL",
+               "epistemic_rule":"MODEL_MUST_NOT_OVERRIDE_CANONICAL_TOOL_RESULT"}
+          os.makedirs("result",exist_ok=True)
+          open("result/result.json","w").write(json.dumps(out,indent=2))
+          print(json.dumps(out))
+          if not ok: raise SystemExit(1)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build054-compute-first-router
+          path: result/result.json

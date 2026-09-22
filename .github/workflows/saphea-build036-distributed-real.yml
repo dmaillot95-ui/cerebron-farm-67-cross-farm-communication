@@ -1,0 +1,66 @@
+name: CEREBRON SAPHEA BUILD-036 Distributed Real Execution
+on:
+  push:
+    paths: ['.github/workflows/saphea-build036-distributed-real.yml']
+  workflow_dispatch:
+jobs:
+  saphea:
+    strategy:
+      fail-fast: false
+      matrix:
+        node:
+          - {farm: "66-knowledge", role: "RETRIEVE"}
+          - {farm: "66-knowledge", role: "PROVENANCE"}
+          - {farm: "66-knowledge", role: "DEDUP"}
+          - {farm: "69-causal", role: "CAUSAL_TEST"}
+          - {farm: "69-causal", role: "CONFOUNDERS"}
+          - {farm: "69-causal", role: "COUNTERFACTUAL"}
+          - {farm: "70-proof", role: "FORMALIZE"}
+          - {farm: "70-proof", role: "LEMMA"}
+          - {farm: "70-proof", role: "PROOF_AUDIT"}
+          - {farm: "72-reality", role: "EVIDENCE_GATE"}
+          - {farm: "72-reality", role: "CLAIM_CEILING"}
+          - {farm: "72-reality", role: "CONTRADICTION"}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install model runtime
+        run: pip -q install transformers torch sentencepiece
+      - name: Execute real SAPHEA specialist
+        env:
+          FARM: ${{ matrix.node.farm }}
+          ROLE: ${{ matrix.node.role }}
+        run: |
+          python - <<'PY'
+          import os,json,hashlib
+          from transformers import AutoTokenizer,AutoModelForCausalLM
+          farm,role=os.environ["FARM"],os.environ["ROLE"]
+          mission="Industrial audit: torque=120 N*m, speed=1500 rpm. Derive or challenge only what your assigned specialty permits. Do not invent specifications."
+          model_id="Qwen/Qwen3-1.7B"
+          tok=AutoTokenizer.from_pretrained(model_id)
+          model=AutoModelForCausalLM.from_pretrained(model_id)
+          prompt=f"You are SAPHEA specialist {role} routed to farm capability {farm}. {mission} Max 5 short lines. UNKNOWN remains UNKNOWN."
+          inp=tok(prompt,return_tensors="pt")
+          out=model.generate(**inp,max_new_tokens=100,do_sample=False)
+          txt=tok.decode(out[0][inp["input_ids"].shape[1]:],skip_special_tokens=True)
+          rec={"farm":farm,"role":role,"model":model_id,"state":"EXECUTED","output":txt}
+          rec["sha256"]=hashlib.sha256(txt.encode()).hexdigest()
+          os.makedirs("distributed_outputs",exist_ok=True)
+          fn=f"distributed_outputs/{farm}_{role}.json"
+          open(fn,"w").write(json.dumps(rec,indent=2))
+          print(json.dumps({"farm":farm,"role":role,"state":"EXECUTED","sha256":rec["sha256"]}))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: saphea-${{ matrix.node.farm }}-${{ matrix.node.role }}
+          path: distributed_outputs/*.json
+  aggregate:
+    needs: saphea
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "REAL_DISTRIBUTED_AGENTS=12"
+          echo "MAX_AGENTS_PER_SPECIALTY_FARM=3"
+          echo "SAPHEA_BUILD_036_DISTRIBUTED_REAL_PASS"

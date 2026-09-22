@@ -1,0 +1,42 @@
+name: CEREBRON BUILD-055 Mixed Task Router
+'on':
+  push:
+    paths:
+      - .github/workflows/saphea-build055-mixed-router.yml
+  workflow_dispatch:
+jobs:
+  mixed-router:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test mixed reasoning-compute decomposition
+        run: |
+          python - <<'PY'
+          import json,os,re
+          cases=[
+            {"id":"stress","task":"A 3600 N load acts on 0.0009 m2. Calculate stress and explain whether the numerical step should be trusted without verification.","expected":["DETERMINISTIC_TOOL","MODEL"]},
+            {"id":"quadratic","task":"Solve x**2-4=0 exactly and explain what the two roots mean.","expected":["SYMBOLIC_TOOL","MODEL"]},
+            {"id":"concept","task":"Explain why provenance matters in an industrial R&D result.","expected":["MODEL"]},
+            {"id":"compare","task":"Compute 125*48, then explain which of two designs is cheaper if the other costs 7000.","expected":["DETERMINISTIC_TOOL","MODEL"]}
+          ]
+          def route(task):
+            s=task.lower(); routes=[]
+            symbolic=bool(re.search(r'\bsolve\b|x\*\*|equation|symbolic',s))
+            numeric=bool(re.search(r'\d',s)) and bool(re.search(r'[/*+]|\d\s*-\s*\d',s))
+            explain=any(k in s for k in ["explain","mean","why","which"])
+            if symbolic: routes.append("SYMBOLIC_TOOL")
+            elif numeric: routes.append("DETERMINISTIC_TOOL")
+            if explain or not routes: routes.append("MODEL")
+            return routes
+          results=[]
+          for x in cases:
+            got=route(x["task"]); results.append({**x,"got":got,"pass":got==x["expected"]})
+          ok=all(r["pass"] for r in results)
+          out={"build":"055","rule":"DECOMPOSE_THEN_ROUTE","results":results,"status":"MIXED_ROUTER_PASS" if ok else "MIXED_ROUTER_FAIL",
+               "guard":"CANONICAL_TOOL_OUTPUT_FEEDS_MODEL_REASONING"}
+          os.makedirs("result",exist_ok=True);open("result/result.json","w").write(json.dumps(out,indent=2));print(json.dumps(out))
+          if not ok: raise SystemExit(1)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build055-mixed-router
+          path: result/result.json

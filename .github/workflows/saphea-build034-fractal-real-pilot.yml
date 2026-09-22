@@ -1,0 +1,51 @@
+name: CEREBRON SAPHEA BUILD-034 Fractal Real Pilot
+on:
+  push:
+    paths: ['.github/workflows/saphea-build034-fractal-real-pilot.yml']
+  workflow_dispatch:
+jobs:
+  pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install runtime
+        run: pip install -q transformers torch accelerate sentencepiece
+      - name: Execute 10 real distinct micro-agents
+        run: |
+          mkdir -p artifacts
+          python - <<'PY'
+          import subprocess,sys,json,hashlib
+          base="Industrial motor: torque 120 N*m, speed 1500 rpm. No efficiency, thermal limit, required load, duty cycle, voltage/current, or safety factor supplied."
+          missions=[
+           ("DERIVE","Compute mechanical shaft power only; compact facts."),
+           ("UNIT","Independently verify rpm to rad/s and power units."),
+           ("FALSIFY","Find ways an adequacy conclusion could be invalid."),
+           ("GAP_LOAD","Identify missing required-load evidence."),
+           ("GAP_THERMAL","Identify missing thermal/duty evidence."),
+           ("GAP_ELECTRIC","Identify missing electrical/efficiency evidence."),
+           ("ASSUMPTION","List assumptions needed for P=tau*omega interpretation."),
+           ("COUNTEREXAMPLE","Give one compact counterexample showing power alone cannot prove adequacy."),
+           ("AUDIT","Audit the numerical calculation independently."),
+           ("FUSE_CHECK","State only verified numeric fact and unresolved adequacy gap.")
+          ]
+          rec=[]
+          for i,(lane,task) in enumerate(missions):
+            prompt=f"ROLE={lane}. {base} {task} No invented specifications. Max 6 short lines."
+            path=f"artifacts/agent_{i:02d}_{lane}.json"
+            with open(path,"w") as f:
+              subprocess.run([sys.executable,"worker/saphea_model_adapter.py","--execute-model","--max-new-tokens","120","--prompt",prompt],stdout=f,check=True)
+            obj=json.load(open(path)); raw=json.dumps(obj,sort_keys=True)
+            rec.append({"agent":i,"lane":lane,"state":"EXECUTED","sha256":hashlib.sha256(raw.encode()).hexdigest(),"answer":obj.get("answer","")})
+          json.dump(rec,open("artifacts/execution_manifest.json","w"),indent=2)
+          assert len(rec)==10 and len({x["lane"] for x in rec})==10
+          print("REAL_FRACTAL_AGENTS=10")
+          print("SAPHEA_BUILD_034_FRACTAL_REAL_PILOT_PASS")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: saphea-build034-fractal-real-pilot
+          path: artifacts/
